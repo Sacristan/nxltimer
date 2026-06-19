@@ -1,0 +1,20 @@
+{
+  "name": "nxl-relay",
+  "version": "1.0.0",
+  "description": "NXL Paintball Timer WebSocket Relay",
+  "main": "server.js",
+  "bin": "server.js",
+  "pkg": {
+    "scripts": "server.js",
+    "assets": [],
+    "targets": [
+      "node18-win-x64",
+      "node18-macos-x64",
+      "node18-macos-arm64"
+    ],
+    "outputPath": "dist"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

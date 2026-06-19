@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NXL Field Timer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#000;--surface:#0c0c0c;--border:#1c1c1c;
+  --accent:#e8c94a;--red:#e63030;--green:#22cc55;
+  --blue:#3366ff;--purple:#cc88ff;--orange:#ff9944;
+  --muted:#2a2a2a;--subtext:#555;--text:#fff;
+  --ff:'Bebas Neue',sans-serif;--ffo:'Oswald',sans-serif;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--ffo);}
+#screen-main{position:absolute;inset:0;display:flex;flex-direction:column;}
+#screen-settings{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg);overflow-y:auto;}
+
+/* ══ TOP SCOREBOARD ══ */
+#scoreboard{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  flex:0 0 auto;min-height:min(32vh,220px);max-height:38vh;
+  border-bottom:2px solid var(--border);
+}
+.team-panel{
+  display:flex;flex-direction:column;justify-content:center;
+  padding:1vh 2vw;overflow:hidden;
+}
+.team-panel.red-panel{align-items:flex-start;}
+.team-panel.green-panel{align-items:flex-end;}
+
+.tp-name{
+  font-family:var(--ff);
+  font-size:clamp(1.2rem,2.8vw,4rem);
+  letter-spacing:0.03em;line-height:1;
+  max-width:100%;overflow:hidden;
+  white-space:nowrap;text-overflow:ellipsis;
+  flex-shrink:0;
+}
+.red-panel   .tp-name{color:var(--red);}
+.green-panel .tp-name{color:var(--green);}
+
+/* score row: score + adj/timeout buttons */
+.score-row{display:flex;align-items:center;gap:0.5vw;margin-top:0.4vh;flex-shrink:0;}
+.red-panel   .score-row{flex-direction:row;}
+.green-panel .score-row{flex-direction:row-reverse;}
+
+.tp-score{
+  font-family:var(--ff);
+  /* score must never be taller than scoreboard minus name height */
+  font-size:clamp(3.5rem,9vw,11rem);
+  line-height:0.9;
+  min-width:1.1ch;text-align:center;flex-shrink:0;
+}
+.red-panel   .tp-score{color:var(--red);}
+.green-panel .tp-score{color:var(--green);}
+.tp-score.bump{animation:bump .2s ease;}
+@keyframes bump{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+
+/* adj + timeout buttons beside score */
+.side-btns{display:flex;flex-direction:column;gap:0.4vh;justify-content:center;}
+.adj-btn,.to-btn{
+  font-family:var(--ff);
+  font-size:clamp(.9rem,1.6vw,2rem);
+  width:clamp(26px,2.8vw,48px);height:clamp(26px,2.8vw,48px);
+  border-radius:3px;border:2px solid;background:transparent;
+  cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.adj-btn:disabled,.to-btn:disabled{opacity:.2;cursor:not-allowed;}
+.adj-plus.red  {color:var(--subtext);border-color:var(--muted);}
+.adj-plus.green{color:var(--subtext);border-color:var(--muted);}
+.adj-minus     {color:var(--subtext);border-color:var(--muted);}
+.adj-plus.red:not(:disabled):hover  {color:#aaa;border-color:var(--subtext);}
+.adj-plus.green:not(:disabled):hover{color:#aaa;border-color:var(--subtext);}
+.adj-minus:not(:disabled):hover{color:#aaa;border-color:var(--subtext);}
+/* timeout btn — neutral, no colour to not distract */
+.to-btn{
+  font-family:var(--ffo);font-weight:600;
+  font-size:clamp(7px,1vw,13px);
+  letter-spacing:.05em;
+  width:clamp(36px,4vw,64px);height:clamp(22px,2vw,34px);
+  color:var(--subtext);border-color:var(--muted);
+}
+.to-btn:not(:disabled):hover{color:var(--text);border-color:var(--subtext);}
+
+/* ══ STATUS CENTRE COLUMN ══ */
+#status-col{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:0 1.5vw;min-width:16vw;max-width:22vw;
+  /* hard boundary so team names can't cross */
+  overflow:hidden;
+}
+#phase-label{
+  font-family:var(--ff);
+  font-size:clamp(1.6rem,5vw,8rem);
+  letter-spacing:0.03em;text-align:center;line-height:1;
+  white-space:normal;word-break:break-word;
+  width:100%;
+  color:var(--subtext);transition:color .3s;
+}
+#phase-label.active  {color:var(--text);}
+#phase-label.clr-cd  {color:var(--orange);}
+#phase-label.clr-brk {color:var(--blue);}
+#phase-label.clr-tmo {color:var(--purple);}
+#phase-label.clr-urgn{color:var(--accent);}
+
+/* ══ CLOCK AREA — fills remaining height ══ */
+#clock-area{
+  flex:1;min-height:0;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding:12vh 0 2vh 0;position:relative;overflow:hidden;
+}
+/* Use SVG-based scaling trick: font fills 100% of container height */
+#clock-wrap{
+  width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+}
+#clock-display{
+  font-family:var(--ff);
+  /* clamp to viewport — aim to fill ~95% of clock area height */
+  font-size:clamp(10.1rem, 81vh, 99rem);
+  line-height:1;
+  color:var(--text);letter-spacing:0.01em;
+  text-align:center;
+  transition:color .4s;
+  /* prevent wrapping or overflow */
+  white-space:nowrap;
+}
+#clock-display.urgent{color:var(--accent);}
+#clock-display.cd    {color:var(--orange);}
+#clock-display.brk   {color:var(--blue);}
+#clock-display.tmo   {color:var(--purple);}
+
+#mercy-banner{
+  display:none;position:absolute;bottom:2vh;left:50%;transform:translateX(-50%);
+  font-family:var(--ff);font-size:clamp(1.5rem,3vw,3.5rem);
+  letter-spacing:.2em;padding:1vh 3vw;border:3px solid;border-radius:4px;
+  animation:mfade .5s ease;white-space:nowrap;z-index:10;
+}
+@keyframes mfade{from{opacity:0;transform:translateX(-50%) scale(.8)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+
+/* ══ BOTTOM BUTTONS ══ */
+#btn-area{
+  flex:0 0 10vh;min-height:48px;max-height:72px;
+  background:var(--surface);border-top:2px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  gap:0.7vw;padding:0 1.2vw;
+}
+.btn{
+  font-family:var(--ffo);font-weight:700;
+  font-size:clamp(9px,1vw,15px);
+  letter-spacing:.1em;text-transform:uppercase;
+  padding:0 1.2vw;height:clamp(34px,5.5vh,52px);
+  border:2px solid;background:transparent;
+  cursor:pointer;transition:all .15s;border-radius:4px;
+  white-space:nowrap;flex-shrink:0;
+}
+.btn:disabled{opacity:.22;cursor:not-allowed;}
+.btn-fill-green {background:var(--green);border-color:var(--green);color:#000;}
+.btn-fill-yellow{background:var(--accent);border-color:var(--accent);color:#000;}
+.btn-fill-red   {background:var(--red);  border-color:var(--red);  color:#fff;}
+.btn-fill-green:not(:disabled):hover {filter:brightness(1.1);}
+.btn-fill-yellow:not(:disabled):hover{filter:brightness(1.1);}
+.btn-fill-red:not(:disabled):hover   {filter:brightness(1.15);}
+.btn-out-muted{color:var(--subtext);border-color:var(--muted);}
+.btn-out-muted:not(:disabled):hover{color:var(--text);border-color:var(--subtext);}
+.bb-sep{width:2px;height:clamp(24px,4vh,40px);background:var(--border);flex-shrink:0;}
+.bb-spc{flex:1;}
+#ws-pill,#green-pill,#red-pill{
+  font-size:clamp(7px,.8vw,11px);letter-spacing:.15em;text-transform:uppercase;
+  padding:3px 8px;border-radius:3px;border:1px solid;
+  color:var(--subtext);border-color:var(--muted);flex-shrink:0;white-space:nowrap;
+  transition:color .4s,border-color .4s;
+}
+
+/* ══ SETTINGS ══ */
+#settings-header{display:flex;align-items:center;gap:16px;padding:22px 28px;border-bottom:1px solid var(--border);flex-shrink:0;}
+#settings-header h1{font-family:var(--ff);font-size:4rem;letter-spacing:.15em;color:var(--accent);}
+#settings-body{padding:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px;}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;}
+.sc h3{font-family:var(--ff);font-size:2.4rem;letter-spacing:.12em;color:var(--accent);margin-bottom:14px;}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:20px;letter-spacing:.3em;text-transform:uppercase;color:var(--subtext);margin-bottom:4px;font-weight:400;}
+.field input{width:100%;background:#000;border:1px solid var(--border);color:var(--text);font-family:var(--ffo);font-weight:500;font-size:2rem;padding:7px 10px;outline:none;border-radius:3px;transition:border-color .2s;}
+.field input:focus{border-color:var(--accent);}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.trow{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
+.trow:last-child{border-bottom:none;}
+.tlabel{font-size:24px;color:var(--text);font-weight:400;}
+.tlabel small{display:block;color:var(--subtext);font-size:20px;font-weight:300;margin-top:1px;}
+.tog{position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-sl{position:absolute;inset:0;background:var(--muted);cursor:pointer;border-radius:22px;transition:background .2s;}
+.tog-sl::after{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;}
+.tog input:checked+.tog-sl{background:var(--accent);}
+.tog input:checked+.tog-sl::after{transform:translateX(20px);}
+.save-btn{display:block;width:100%;margin-top:6px;background:var(--accent);color:#000;font-family:var(--ff);font-size:2.4rem;letter-spacing:.15em;border:none;padding:13px;cursor:pointer;border-radius:4px;transition:filter .15s;}
+.save-btn:hover{filter:brightness(1.1);}
+</style>
+</head>
+<body>
+
+<!-- ═══════ MAIN SCREEN ═══════ -->
+<div id="screen-main">
+
+  <!-- SCOREBOARD -->
+  <div id="scoreboard">
+    <!-- RED -->
+    <div class="team-panel red-panel">
+      <div class="tp-name" id="red-name">RED</div>
+      <div class="score-row">
+        <div class="tp-score" id="red-score">0</div>
+        <div class="side-btns">
+          <button class="adj-btn adj-plus red"  id="red-plus"  onclick="adjustScore('red',1)" >+</button>
+          <button class="adj-btn adj-minus"      id="red-minus" onclick="adjustScore('red',-1)">−</button>
+          <button class="to-btn" id="btn-to-r" onclick="handleTimeout('red')" disabled>T/O</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATUS CENTRE -->
+    <div id="status-col">
+      <div id="phase-label">READY</div>
+      <div id="sub-timer" style="display:none;font-family:var(--ff);font-size:clamp(2.8rem,6vw,9rem);color:var(--subtext);letter-spacing:0.04em;margin-top:0.3vh;"></div>
+    </div>
+
+    <!-- GREEN -->
+    <div class="team-panel green-panel">
+      <div class="tp-name" id="green-name">GREEN</div>
+      <div class="score-row">
+        <div class="tp-score" id="green-score">0</div>
+        <div class="side-btns">
+          <button class="adj-btn adj-plus green" id="green-plus"  onclick="adjustScore('green',1)" >+</button>
+          <button class="adj-btn adj-minus"       id="green-minus" onclick="adjustScore('green',-1)">−</button>
+          <button class="to-btn" id="btn-to-g" onclick="handleTimeout('green')" disabled>T/O</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLOCK -->
+  <div id="clock-area">
+    <div id="clock-wrap">
+      <div id="clock-display">0:00</div>
+    </div>
+    <div id="mercy-banner"></div>
+  </div>
+
+  <!-- BUTTONS -->
+  <div id="btn-area">
+    <button class="btn btn-fill-green"  id="btn-ss"    onclick="handleStartStop()"            >▶ START</button>
+    <button class="btn btn-fill-red"    id="btn-stop"  onclick="handleStop()" style="display:none">⏹ STOP</button>
+    <button class="btn btn-out-muted"   id="btn-break" onclick="handleBreak()" disabled>☕ BREAK</button>
+    <div class="bb-spc"></div>
+    <button class="btn btn-out-muted"   onclick="resetAll()">RESET</button>
+    <button class="btn btn-out-muted"   onclick="openSettings()">⚙ SETTINGS</button>
+    <div id="ws-pill">RELAY ●</div>
+    <div id="green-pill" title="GREEN ESP32">GRN ●</div>
+    <div id="red-pill" title="RED ESP32">RED ●</div>
+  </div>
+</div>
+
+<!-- ═══════ SETTINGS SCREEN ═══════ -->
+<div id="screen-settings">
+  <div id="settings-header">
+    <h1>SETTINGS</h1>
+    <button class="btn btn-out-muted" onclick="closeSettings()" style="margin-left:auto;height:36px;padding:0 14px;">← BACK</button>
+  </div>
+  <div id="settings-body">
+    <div class="sc">
+      <h3>TEAMS</h3>
+      <div class="field"><label>Red Team Name</label><input type="text" id="s-rn" maxlength="25" value="RED"/></div>
+      <div class="field"><label>Green Team Name</label><input type="text" id="s-gn" maxlength="25" value="GREEN"/></div>
+      <div class="field"><label>Relay Server IP</label><input type="text" id="s-wsip" placeholder="e.g. 192.168.1.101"/></div>
+    </div>
+    <div class="sc">
+      <h3>TIMING</h3>
+      <div class="frow">
+        <div class="field"><label>Game Time (min)</label><input type="number" id="s-gm" value="5" min="0" max="99"/></div>
+        <div class="field"><label>Game Time (sec)</label><input type="number" id="s-gs" value="0" min="0" max="59"/></div>
+      </div>
+      <div class="field"><label>Break Time (seconds)</label><input type="number" id="s-br" value="60" min="5" max="600"/></div>
+      <div class="field"><label>Team Timeout (seconds)</label><input type="number" id="s-to" value="30" min="5" max="120"/></div>
+    </div>
+    <div class="sc">
+      <h3>OPTIONS</h3>
+      <div class="trow">
+        <div class="tlabel">Auto Rounds<small>POINT → break → countdown → resume &amp; repeat</small></div>
+        <label class="tog"><input type="checkbox" id="s-ar" checked onchange="updateSwitchVisibility()"/><span class="tog-sl"></span></label>
+      </div>
+      <div class="trow">
+        <div class="tlabel">No False Start Countdown<small>Silences beeps on 5→1</small></div>
+        <label class="tog"><input type="checkbox" id="s-nfs"/><span class="tog-sl"></span></label>
+      </div>
+      <div class="trow">
+        <div class="tlabel">Mercy Rule<small>Auto-win on X score lead</small></div>
+        <label class="tog"><input type="checkbox" id="s-mo" onchange="document.getElementById('mercy-f').style.display=this.checked?'block':'none'"/><span class="tog-sl"></span></label>
+      </div>
+      <div class="field" id="mercy-f" style="margin-top:10px;display:none">
+        <label>Mercy Lead (points)</label>
+        <input type="number" id="s-ml" value="5" min="1" max="99"/>
+      </div>
+      <!-- Manual switch (auto rounds OFF) -->
+      <div id="manual-switch-row" class="trow" style="display:none">
+        <div class="tlabel">Switch Sides<small>Manually flip teams on screen</small></div>
+        <button class="btn btn-out-muted" style="height:36px;padding:0 14px;font-size:14px" onclick="flipSides(false);updateTeamUI()">⇄ FLIP</button>
+      </div>
+      <!-- Auto switch (auto rounds ON) -->
+      <div id="auto-switch-section" style="display:block">
+        <div class="trow">
+          <div class="tlabel">Switching Sides<small>Auto-flip every X rounds</small></div>
+          <label class="tog"><input type="checkbox" id="s-sw" onchange="document.getElementById('switch-f').style.display=this.checked?'block':'none'"/><span class="tog-sl"></span></label>
+        </div>
+        <div class="field" id="switch-f" style="margin-top:10px;display:none">
+          <label>Switch every X rounds</label>
+          <input type="number" id="s-swe" value="3" min="1" max="99"/>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:0 24px 24px"><button class="save-btn" onclick="saveSettings()">SAVE SETTINGS</button></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG & STATE
+// ══════════════════════════════════════════════
+const cfg={
+  redName:'RED', greenName:'GREEN',
+  gameTime:300, breakTime:60, timeoutTime:30,
+  autoRounds:true, noFalseStart:false,
+  mercyOn:false, mercyLead:5,
+  autoSwitch:false, autoSwitchEvery:3  // auto side-switch after X rounds
+};
+const S={
+  redScore:0, greenScore:0,
+  phase:'idle',
+  timeLeft:0,
+  handle:null,
+  gameOver:false,
+  pendingCb:null,
+  scoreLocked:false,
+  subPaused:false,
+  subN:0,
+  roundsPlayed:0,    // counts rounds for auto side-switch
+  sidesFlipped:false // tracks current flip state
+};
+
+// ══════════════════════════════════════════════
+// AUDIO — NXL style blip countdown
+// ══════════════════════════════════════════════
+let _ctx=null;
+function AC(){
+  if(!_ctx)_ctx=new(window.AudioContext||window.webkitAudioContext)();
+  return _ctx;
+}
+
+// ── Core beep primitive ───────────────────────────────────
+// Uses linear ramps throughout — consistent on Mac & Windows
+function tone(hz, dur, vol=0.4){
+  try{
+    const c=AC(), now=c.currentTime;
+    const o=c.createOscillator(), g=c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type='sine'; o.frequency.value=hz;
+    // hard on, linear fade — avoids Mac exponential-to-zero clicks
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(vol, now+0.008);   // 8ms attack
+    g.gain.setValueAtTime(vol, now+dur-0.02);
+    g.gain.linearRampToValueAtTime(0, now+dur);       // 20ms release
+    o.start(now); o.stop(now+dur+0.01);
+  }catch(e){}
+}
+
+// Countdown tick: 1000Hz / 200ms
+function blip(n, muted){
+  if(muted) return;
+  tone(1000, 0.2, 0.42);
+}
+
+function makeDistCurve(amount){
+  const n=256, curve=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const x=i*2/n-1;
+    curve[i]=((Math.PI+amount)*x)/(Math.PI+amount*Math.abs(x));
+  }
+  return curve;
+}
+
+// GO blast: 2500Hz / 1.2s
+function beepGo(){
+  tone(2500, 1.2, 0.5);
+}
+
+// Pause: 1000Hz 200ms, 1000Hz 200ms, 1000Hz 900ms
+function beepPause(){
+  try{
+    const c=AC(), now=c.currentTime;
+    const gaps=[0, 0.35, 0.7];
+    const durs=[0.2, 0.2, 0.9];
+    gaps.forEach((t,i)=>{
+      const o=c.createOscillator(), g=c.createGain();
+      o.connect(g); g.connect(c.destination);
+      o.type='sine'; o.frequency.value=1000;
+      const s=now+t, d=durs[i];
+      g.gain.setValueAtTime(0, s);
+      g.gain.linearRampToValueAtTime(0.42, s+0.008);
+      g.gain.setValueAtTime(0.42, s+d-0.02);
+      g.gain.linearRampToValueAtTime(0, s+d);
+      o.start(s); o.stop(s+d+0.01);
+    });
+  }catch(e){}
+}
+
+// Urgent last-10s tick: 1000Hz / 200ms
+function beepUrgent(){
+  tone(1000, 0.2, 0.32);
+}
+
+// End signal: 1000Hz 200ms, 1000Hz 200ms, 2500Hz 1.5s
+function beepEnd(){
+  try{
+    const c=AC(), now=c.currentTime;
+    const beeps=[[1000,0,0.2],[1000,0.35,0.2],[2500,0.7,1.5]];
+    beeps.forEach(([hz,t,d])=>{
+      const o=c.createOscillator(), g=c.createGain();
+      o.connect(g); g.connect(c.destination);
+      o.type='sine'; o.frequency.value=hz;
+      const s=now+t;
+      g.gain.setValueAtTime(0, s);
+      g.gain.linearRampToValueAtTime(0.48, s+0.008);
+      g.gain.setValueAtTime(0.48, s+d-0.02);
+      g.gain.linearRampToValueAtTime(0, s+d);
+      o.start(s); o.stop(s+d+0.01);
+    });
+  }catch(e){}
+}
+
+const SYN=window.speechSynthesis;
+function say(t){
+  if(!SYN)return;
+  SYN.cancel();
+  const u=new SpeechSynthesisUtterance(t);
+  u.rate=0.92;u.volume=1;
+  SYN.speak(u);
+}
+
+// ══════════════════════════════════════════════
+// CLOCK FORMAT
+// ══════════════════════════════════════════════
+function fmt(sec){
+  const m=Math.floor(Math.abs(sec)/60),s=Math.abs(sec)%60;
+  if(cfg.gameTime<600) return m+':'+String(s).padStart(2,'0');
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+// ══════════════════════════════════════════════
+// DISPLAY
+// ══════════════════════════════════════════════
+function setClock(time,cls,status,sCls){
+  const p=S.phase;
+  // During break or timeout, main clock always shows frozen game time
+  const displayTime=(p==='break'||p==='timeout')?S.timeLeft:time;
+  document.getElementById('clock-display').textContent=fmt(displayTime);
+  document.getElementById('clock-display').className=cls||'';
+  const pl=document.getElementById('phase-label');
+  pl.textContent=status||'';
+  pl.className=sCls||'';
+}
+
+function setSubTimer(time, visible, color){
+  const el=document.getElementById('sub-timer');
+  if(!visible){el.style.display='none';return;}
+  el.style.display='block';
+  el.textContent=fmt(time);
+  el.style.color=color||'var(--subtext)';
+}
+
+function updateTeamUI(){
+  // When flipped: red panel shows green team name/score and vice versa
+  if(S.sidesFlipped){
+    document.getElementById('red-name').textContent=cfg.greenName;
+    document.getElementById('green-name').textContent=cfg.redName;
+    document.getElementById('red-score').textContent=S.greenScore;
+    document.getElementById('green-score').textContent=S.redScore;
+  } else {
+    document.getElementById('red-name').textContent=cfg.redName;
+    document.getElementById('green-name').textContent=cfg.greenName;
+    document.getElementById('red-score').textContent=S.redScore;
+    document.getElementById('green-score').textContent=S.greenScore;
+  }
+}
+
+// Flip sides: swap display only, ESP32 scoring stays physically the same
+// but internally scores are reassigned so the right team gets the point
+function flipSides(announce=false){
+  S.sidesFlipped=!S.sidesFlipped;
+  updateTeamUI();
+  if(announce) say('Switch sides');
+}
+
+function bumpScore(t){
+  const el=document.getElementById(t+'-score');
+  el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump');
+  setTimeout(()=>el.classList.remove('bump'),300);
+}
+
+function updateButtons(){
+  const p=S.phase;
+  const running=p==='running', paused=p==='paused';
+  const inCD=p==='countdown', inBrk=p==='break', inTO=p==='timeout';
+  const busy=inCD||inBrk||inTO;
+
+  const ss=document.getElementById('btn-ss');
+  if(running){ss.textContent='⏸ PAUSE';ss.className='btn btn-fill-yellow';}
+  else if(paused){ss.textContent='▶ RESUME';ss.className='btn btn-fill-green';}
+  else{ss.textContent='▶ START';ss.className='btn btn-fill-green';}
+  ss.style.display=(busy||S.gameOver)?'none':'';
+  ss.disabled=S.gameOver;
+
+  // STOP: visible during countdown, break, timeout
+  document.getElementById('btn-stop').style.display=(inCD||inBrk||inTO)?'':'none';
+
+  // BREAK: available when paused
+  document.getElementById('btn-break').disabled=!paused||S.gameOver;
+
+  // T/O buttons: only during break
+  const toOk=inBrk&&!S.gameOver;
+  document.getElementById('btn-to-r').disabled=!toOk;
+  document.getElementById('btn-to-g').disabled=!toOk;
+
+  document.querySelectorAll('.adj-btn').forEach(b=>b.disabled=S.gameOver);
+}
+
+// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// STOP — stops any active timer
+// ══════════════════════════════════════════════
+function handleStop(){
+  const p=S.phase;
+  clearInterval(S.handle);
+  S.subPaused=false;
+  setSubTimer(0,false);
+  if(p==='countdown'){
+    S.phase='paused';
+    setClock(S.timeLeft,'','PAUSED','active');
+    updateButtons();
+  } else if(p==='break'||p==='timeout'){
+    S.phase='paused';
+    setClock(S.timeLeft,'','PAUSED','active');
+    updateButtons();
+  }
+}
+
+// ══════════════════════════════════════════════
+// PAUSE/RESUME sub-timer toggle (break/timeout)
+// ══════════════════════════════════════════════
+function handleResumeToggle(){
+  const p=S.phase;
+  if(p==='break'||p==='timeout'){
+    if(S.subPaused){
+      // resume sub-timer
+      S.subPaused=false;
+      let n=S.subN;
+      const color=p==='break'?'var(--blue)':'var(--purple)';
+      const label=p==='break'?'BREAK':'T/OUT';
+      const cls=p==='break'?'clr-brk':'clr-tmo';
+      updateButtons();
+      S.handle=setInterval(()=>{
+        n--;S.subN=n;
+        setClock(S.timeLeft,'',label,cls);
+        setSubTimer(n,true,color);
+        if(n===30) say('30 seconds');
+        if(n<=0){
+          clearInterval(S.handle);
+          setSubTimer(0,false);S.subPaused=false;
+          if(p==='break'){
+            S.phase='idle';updateButtons();
+            if(cfg.autoRounds) setTimeout(()=>startCountdown(()=>startGameTimer()),300);
+          } else {
+            setTimeout(()=>startCountdown(()=>startGameTimer()),300);
+          }
+        }
+      },1000);
+    } else {
+      clearInterval(S.handle);
+      S.subPaused=true;
+      updateButtons();
+    }
+  }
+}
+
+// Legacy handleResume kept for spacebar action compatibility
+function handleResume(){ handleResumeToggle(); }
+// ══════════════════════════════════════════════
+function startCountdown(cb){
+  clearInterval(S.handle);
+  S.phase='countdown';S.pendingCb=cb;
+  updateButtons();
+  let n=10;
+  say('10 seconds');
+  document.getElementById('clock-display').textContent='10';
+  document.getElementById('clock-display').className='cd';
+  document.getElementById('phase-label').textContent='START';
+  document.getElementById('phase-label').className='clr-cd';
+
+  S.handle=setInterval(()=>{
+    n--;
+    if(n>0){
+      document.getElementById('clock-display').textContent=n;
+      document.getElementById('clock-display').className='cd';
+      document.getElementById('phase-label').textContent='START';
+      document.getElementById('phase-label').className='clr-cd';
+      const muted = cfg.noFalseStart && n<=5;
+      blip(n, muted);
+    } else {
+      clearInterval(S.handle);
+      document.getElementById('clock-display').textContent=fmt(S.timeLeft);
+      document.getElementById('clock-display').className='';
+      document.getElementById('phase-label').textContent='';
+      beepGo();
+      setTimeout(()=>{ S.phase='idle'; S.pendingCb=null; if(cb)cb(); }, 700);
+    }
+  },1000);
+}
+
+// ══════════════════════════════════════════════
+// GAME TIMER
+// ══════════════════════════════════════════════
+function startGameTimer(){
+  S.phase='running'; updateButtons();
+  setSubTimer(0,false);
+  setClock(S.timeLeft,'','LIVE','active');
+  let sm=S.timeLeft>60, ss30=S.timeLeft>30;
+
+  S.handle=setInterval(()=>{
+    S.timeLeft--;
+    const urgent=S.timeLeft<=30;
+    setClock(S.timeLeft, urgent?'urgent':'', 'LIVE', urgent?'clr-urgn':'active');
+    if(S.timeLeft===60&&sm){ sm=false; say('1 minute'); }
+    if(S.timeLeft===30&&ss30){ ss30=false; say('30 seconds'); }
+    if(S.timeLeft<=0){
+      clearInterval(S.handle);
+      beepEnd();
+      S.phase='idle';
+      setSubTimer(0,false);
+      setClock(0,'urgent','GAME OVER','clr-urgn');
+      updateButtons();
+    }
+  },1000);
+}
+
+// ══════════════════════════════════════════════
+// START / PAUSE  [spacebar]
+// ══════════════════════════════════════════════
+function handleStartStop(){
+  if(S.gameOver)return;
+  AC();
+  if(S.phase==='idle'||S.phase==='paused'){
+    if(S.phase==='idle'&&S.timeLeft===0) S.timeLeft=cfg.gameTime;
+    startCountdown(()=>startGameTimer());
+  } else if(S.phase==='running'){
+    clearInterval(S.handle);
+    S.phase='paused';
+    beepPause();
+    setClock(S.timeLeft,'','PAUSED','active');
+    updateButtons();
+    // Auto rounds: pause → break → countdown → game
+    if(cfg.autoRounds) setTimeout(()=>startBreakTimer(true), 400);
+  }
+}
+
+// ══════════════════════════════════════════════
+// BREAK TIMER
+// ══════════════════════════════════════════════
+function startBreakTimer(auto=false){
+  clearInterval(S.handle);
+  S.phase='break'; S.subPaused=false;
+  let n=cfg.breakTime; S.subN=n;
+  updateButtons();
+  say(cfg.breakTime+' seconds');
+  setClock(S.timeLeft,'','BREAK','clr-brk');
+  setSubTimer(n,true,'var(--blue)');
+
+  S.handle=setInterval(()=>{
+    n--;S.subN=n;
+    setClock(S.timeLeft,'','BREAK','clr-brk');
+    setSubTimer(n,true,'var(--blue)');
+    if(n===30) say('30 seconds');
+    if(n<=0){
+      clearInterval(S.handle);
+      setSubTimer(0,false); S.subPaused=false;
+      if(cfg.autoRounds){
+        S.phase='idle';
+        updateButtons();
+        setTimeout(()=>startCountdown(()=>startGameTimer()),300);
+      } else {
+        // stay paused so break button is available again
+        S.phase='paused';
+        setClock(S.timeLeft,'','PAUSED','active');
+        updateButtons();
+      }
+    }
+  },1000);
+}
+function handleBreak(){
+  if(S.phase==='paused'&&!S.gameOver) startBreakTimer(false);
+}
+
+// ══════════════════════════════════════════════
+// TIMEOUT  (available only during break)
+// ══════════════════════════════════════════════
+function handleTimeout(team){
+  if(S.phase!=='break'||S.gameOver) return;
+  clearInterval(S.handle);
+  S.phase='timeout'; S.subPaused=false;
+  let n=cfg.timeoutTime; S.subN=n;
+  updateButtons();
+  const nm=team==='red'?cfg.redName:cfg.greenName;
+  say(nm+' Time out '+cfg.timeoutTime+' seconds');
+  setClock(S.timeLeft,'','T/OUT','clr-tmo');
+  setSubTimer(n,true,'var(--purple)');
+
+  S.handle=setInterval(()=>{
+    n--;S.subN=n;
+    setClock(S.timeLeft,'','T/OUT','clr-tmo');
+    setSubTimer(n,true,'var(--purple)');
+    if(n===30) say('30 seconds');
+    if(n<=0){
+      clearInterval(S.handle);
+      setSubTimer(0,false); S.subPaused=false;
+      if(cfg.autoRounds){
+        setTimeout(()=>startCountdown(()=>startGameTimer()),300);
+      } else {
+        S.phase='paused';
+        setClock(S.timeLeft,'','PAUSED','active');
+        updateButtons();
+      }
+    }
+  },1000);
+}
+
+// ══════════════════════════════════════════════
+// SCORING
+// ══════════════════════════════════════════════
+function adjustScore(team, delta, surrender=false){
+  if(S.gameOver) return;
+  // When sides are flipped, ESP32 physical position stays same
+  // but we swap which internal team gets the score
+  let actualTeam = team;
+  if(S.sidesFlipped) actualTeam = (team==='red') ? 'green' : 'red';
+
+  // Only lock on positive score during running game
+  if(delta>0 && S.phase==='running'){
+    if(S.scoreLocked) return;
+    S.scoreLocked=true;
+  }
+  if(actualTeam==='red') S.redScore  =Math.max(0,S.redScore+delta);
+  else                   S.greenScore=Math.max(0,S.greenScore+delta);
+  // bump the visual panel that scored (respects flip)
+  bumpScore(S.sidesFlipped ? (team==='red'?'green':'red') : team);
+  updateTeamUI();
+
+  if(delta>0 && S.phase==='running'){
+    clearInterval(S.handle);
+    beepEnd();
+    S.roundsPlayed++;
+
+    // Surrender voice
+    if(surrender){
+      const surrenderingTeam = actualTeam==='red' ? cfg.greenName : cfg.redName;
+      setTimeout(()=>say(surrenderingTeam+' Surrender'), 900);
+    }
+
+    // Check auto side-switch — say after end signal (~1.5s)
+    const switchDelay = surrender ? 2400 : 1600;
+    if(cfg.autoRounds && cfg.autoSwitch && cfg.autoSwitchEvery>0
+       && S.roundsPlayed % cfg.autoSwitchEvery === 0){
+      setTimeout(()=>{ flipSides(true); }, switchDelay);
+    }
+
+    if(cfg.autoRounds){
+      S.phase='paused';
+      updateButtons();
+      setTimeout(()=>{ S.scoreLocked=false; startBreakTimer(true); }, surrender ? 2200 : 600);
+    } else {
+      S.phase='paused';
+      setClock(S.timeLeft,'','PAUSED','active');
+      updateButtons();
+      setTimeout(()=>{ S.scoreLocked=false; }, 1000);
+    }
+  }
+  checkMercy();
+}
+
+// ══════════════════════════════════════════════
+// MERCY
+// ══════════════════════════════════════════════
+function checkMercy(){
+  if(!cfg.mercyOn||S.gameOver) return;
+  const d=Math.abs(S.redScore-S.greenScore);
+  if(d>=cfg.mercyLead){
+    S.gameOver=true;
+    clearInterval(S.handle);
+    S.phase='idle';
+    updateButtons();
+    const w=S.redScore>S.greenScore?cfg.redName:cfg.greenName;
+    const col=S.redScore>S.greenScore?'var(--red)':'var(--green)';
+    const b=document.getElementById('mercy-banner');
+    b.textContent='MERCY — '+w.toUpperCase()+' WINS!';
+    b.style.color=col;b.style.borderColor=col;b.style.display='block';
+    say('Mercy rule. '+w+' wins!');
+  }
+}
+
+// ══════════════════════════════════════════════
+// RESET
+// ══════════════════════════════════════════════
+function resetAll(){
+  clearInterval(S.handle);
+  S.redScore=0; S.greenScore=0;
+  S.timeLeft=cfg.gameTime;
+  S.phase='idle'; S.gameOver=false;
+  S.scoreLocked=false; S.subPaused=false; S.subN=0;
+  S.roundsPlayed=0; S.sidesFlipped=false;
+  setSubTimer(0,false);
+  document.getElementById('mercy-banner').style.display='none';
+  setClock(S.timeLeft,'','READY','');
+  updateTeamUI(); updateButtons();
+}
+
+// ══════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════
+function updateSwitchVisibility(){
+  const ar=document.getElementById('s-ar').checked;
+  document.getElementById('manual-switch-row').style.display=ar?'none':'flex';
+  document.getElementById('auto-switch-section').style.display=ar?'block':'none';
+}
+
+function openSettings(){
+  document.getElementById('s-rn').value=cfg.redName;
+  document.getElementById('s-gn').value=cfg.greenName;
+  document.getElementById('s-gm').value=Math.floor(cfg.gameTime/60);
+  document.getElementById('s-gs').value=cfg.gameTime%60;
+  document.getElementById('s-br').value=cfg.breakTime;
+  document.getElementById('s-to').value=cfg.timeoutTime;
+  document.getElementById('s-ar').checked=cfg.autoRounds;
+  document.getElementById('s-nfs').checked=cfg.noFalseStart;
+  document.getElementById('s-mo').checked=cfg.mercyOn;
+  document.getElementById('mercy-f').style.display=cfg.mercyOn?'block':'none';
+  document.getElementById('s-ml').value=cfg.mercyLead;
+  document.getElementById('s-sw').checked=cfg.autoSwitch;
+  document.getElementById('switch-f').style.display=cfg.autoSwitch?'block':'none';
+  document.getElementById('s-swe').value=cfg.autoSwitchEvery;
+  document.getElementById('s-wsip').value=_wsIP||'';
+  updateSwitchVisibility();
+  document.getElementById('screen-main').style.display='none';
+  document.getElementById('screen-settings').style.display='flex';
+}
+function closeSettings(){
+  document.getElementById('screen-settings').style.display='none';
+  document.getElementById('screen-main').style.display='flex';
+}
+function saveSettings(){
+  cfg.redName=document.getElementById('s-rn').value.trim().toUpperCase()||'RED';
+  cfg.greenName=document.getElementById('s-gn').value.trim().toUpperCase()||'GREEN';
+  const m=parseInt(document.getElementById('s-gm').value)||0;
+  const s=parseInt(document.getElementById('s-gs').value)||0;
+  cfg.gameTime=m*60+s||300;
+  cfg.breakTime=parseInt(document.getElementById('s-br').value)||60;
+  cfg.timeoutTime=parseInt(document.getElementById('s-to').value)||30;
+  cfg.autoRounds=document.getElementById('s-ar').checked;
+  cfg.noFalseStart=document.getElementById('s-nfs').checked;
+  cfg.mercyOn=document.getElementById('s-mo').checked;
+  cfg.mercyLead=parseInt(document.getElementById('s-ml').value)||5;
+  cfg.autoSwitch=document.getElementById('s-sw').checked;
+  cfg.autoSwitchEvery=parseInt(document.getElementById('s-swe').value)||3;
+  const ip=document.getElementById('s-wsip').value.trim();
+  if(S.phase==='idle') S.timeLeft=cfg.gameTime;
+  updateTeamUI();
+  setClock(S.timeLeft,'','READY','');
+  closeSettings();
+  wsConnect(ip);
+}
+
+// ══════════════════════════════════════════════
+// KEYBOARD
+// ══════════════════════════════════════════════
+function handleSpaceAction(){
+  const p=S.phase;
+  if(p==='countdown'||p==='break'||p==='timeout') handleStop();
+  else handleStartStop();
+}
+
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('screen-settings').style.display!=='none') return;
+  if(e.target.tagName==='INPUT') return;
+  if(e.code==='Space'){ e.preventDefault(); handleSpaceAction(); }
+});
+
+// ══════════════════════════════════════════════
+// WEBSOCKET
+// ══════════════════════════════════════════════
+let _ws=null, _wsIP='', _wsRetry=null;
+function wsConnect(ip){
+  if(_ws){try{_ws.onclose=null;_ws.close();}catch(e){}}
+  clearTimeout(_wsRetry);
+  if(!ip){wsSetStatus('off');return;}
+  _wsIP=ip; wsSetStatus('connecting');
+  try{
+    _ws=new WebSocket('ws://'+ip+':81');
+    _ws.onopen=()=>wsSetStatus('on');
+    _ws.onclose=()=>{wsSetStatus('off');_wsRetry=setTimeout(()=>wsConnect(_wsIP),3000);};
+    _ws.onerror=()=>wsSetStatus('off');
+    _ws.onmessage=(e)=>{
+      const cmd=e.data.trim();
+      switch(cmd){
+        // GPIO 13 on either ESP32 — same as spacebar
+        case 'GREEN_SPACE':
+        case 'RED_SPACE':
+          handleSpaceAction();
+          break;
+
+        // GPIO 27 or 12 on GREEN ESP32
+        case 'GREEN_BTN':
+          if(S.phase==='running') adjustScore('red',1);
+          else if(S.phase==='break') handleTimeout('green');
+          break;
+
+        case 'GREEN_SURRENDER':
+          if(S.phase==='running') adjustScore('red', 1, true);
+          else if(S.phase==='break') handleTimeout('green');
+          break;
+
+        case 'RED_BTN':
+          if(S.phase==='running') adjustScore('green',1);
+          else if(S.phase==='break') handleTimeout('red');
+          break;
+
+        case 'RED_SURRENDER':
+          if(S.phase==='running') adjustScore('green', 1, true);
+          else if(S.phase==='break') handleTimeout('red');
+          break;
+
+        // Heartbeats from team boxes (via referee)
+        case 'GREEN_ALIVE': heartbeat('green'); break;
+        case 'RED_ALIVE':   heartbeat('red');   break;
+        // Also light up on any button press
+        case 'GREEN_SPACE':
+        case 'GREEN_BTN':
+        case 'GREEN_SURRENDER': heartbeat('green'); break;
+        case 'RED_SPACE':
+        case 'RED_BTN':
+        case 'RED_SURRENDER':   heartbeat('red');   break;
+        case 'ESP32_READY': break; // ignore
+        case 'AWAY_SCORE': adjustScore('green',1);  break;
+        case 'HOME_MINUS': adjustScore('red',-1);   break;
+        case 'AWAY_MINUS': adjustScore('green',-1); break;
+        case 'START_STOP': handleSpaceAction();      break;
+        case 'RESET':      resetAll();               break;
+      }
+    };
+  }catch(e){wsSetStatus('off');}
+}
+function wsSetStatus(s){
+  const el=document.getElementById('ws-pill');
+  if(s==='on'){el.textContent='RELAY ●';el.style.color='var(--green)';el.style.borderColor='var(--green)';}
+  else if(s==='connecting'){el.textContent='RELAY…';el.style.color='var(--orange)';el.style.borderColor='var(--orange)';}
+  else{el.textContent='RELAY ●';el.style.color='var(--subtext)';el.style.borderColor='var(--muted)';}
+}
+
+// ── Team box heartbeat tracking ────────────────────────────────────────────
+const HEARTBEAT_TIMEOUT = 8000; // ms — if no ping in 8s, show as offline
+const teamLastSeen = { green: 0, red: 0 };
+
+function updateTeamPill(team){
+  const el = document.getElementById(team+'-pill');
+  const age = Date.now() - teamLastSeen[team];
+  if(teamLastSeen[team] === 0){
+    // never seen
+    el.textContent = (team==='green'?'GRN':'RED')+' ●';
+    el.style.color='var(--subtext)'; el.style.borderColor='var(--muted)';
+  } else if(age < HEARTBEAT_TIMEOUT){
+    // online
+    el.textContent = (team==='green'?'GRN':'RED')+' ●';
+    el.style.color=team==='green'?'var(--green)':'var(--red)';
+    el.style.borderColor=team==='green'?'var(--green)':'var(--red)';
+  } else {
+    // timed out
+    el.textContent = (team==='green'?'GRN':'RED')+' ○';
+    el.style.color='var(--orange)'; el.style.borderColor='var(--orange)';
+  }
+}
+
+function heartbeat(team){
+  teamLastSeen[team] = Date.now();
+  updateTeamPill(team);
+}
+
+// Poll pill status every 2s to catch timeouts
+setInterval(()=>{ updateTeamPill('green'); updateTeamPill('red'); }, 2000);
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+S.timeLeft=cfg.gameTime;
+updateTeamUI();
+setClock(S.timeLeft,'','READY','');
+updateButtons();
+</script>
+</body>
+</html>
