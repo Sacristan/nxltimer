@@ -480,17 +480,14 @@ function updateClockFontSize(){
   const H = window.innerHeight * _clockPct / 100;
   if(!W || !H) return;
   const disp = document.getElementById('clock-display');
-  const t = disp.textContent.trim() || '0:00';
-  // Bebas Neue width-to-height ratios per text length
-  const r = t.length <= 1 ? 0.53 :
-            t.length === 2 ? 1.00 :
-            t.length <= 4 ? 1.88 : 2.22;
-  const fs = Math.max(64, Math.min(H * 1.23, W / r));
-  const fsPx = fs.toFixed(1) + 'px';
-  if(disp.style.fontSize !== fsPx) disp.style.fontSize = fsPx;
-  // Center glyph vertically: glyph occupies 0.807×fs of the container H
-  const glyphH = fs * 0.807;
-  disp.style.marginTop = Math.max(0, (H - glyphH) / 2).toFixed(1) + 'px';
+  // Set height-limited size, then let the browser report the actual text width
+  disp.style.fontSize = (H * 1.23).toFixed(1) + 'px';
+  const tw = disp.scrollWidth || 1;
+  // Scale down only if text is wider than the viewport
+  const fs = Math.max(64, H * 1.23 * Math.min(1, W / tw));
+  disp.style.fontSize = fs.toFixed(1) + 'px';
+  // Center glyph vertically in clock area (glyph occupies 0.807×fs)
+  disp.style.marginTop = Math.max(0, (H - fs * 0.807) / 2).toFixed(1) + 'px';
 }
 
 // ══════════════════════════════════════════════
@@ -509,11 +506,9 @@ function setClock(time,cls,status,sCls){
   const p=S.phase;
   const displayTime=(p==='break'||p==='timeout')?S.timeLeft:time;
   const disp=document.getElementById('clock-display');
-  const newText=fmt(displayTime);
-  const wasLen=disp.textContent.length;
-  disp.textContent=newText;
+  disp.textContent=fmt(displayTime);
   disp.className=cls||'';
-  if(newText.length!==wasLen) updateClockFontSize();
+  updateClockFontSize();
   const pl=document.getElementById('phase-label');
   pl.textContent=status||'';
   pl.className=sCls||'';
