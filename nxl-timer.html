@@ -22,8 +22,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 #scoreboard{
   display:grid;
   grid-template-columns:1fr auto 1fr;
-  height:var(--score-h, 30vh);
-  min-height:80px;
+  height:calc(var(--score-pct, 30) * 1vh);
   flex-shrink:0;
 }
 /* ══ DRAG DIVIDER ══ */
@@ -53,7 +52,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 
 .tp-name{
   font-family:var(--ff);
-  font-size:clamp(1rem, calc(var(--score-h, 30vh) * 0.3), 6rem);
+  font-size:clamp(1rem, calc(calc(var(--score-pct, 30) * 1vh) * 0.18), 99rem);
   letter-spacing:0.03em;line-height:1;
   max-width:100%;overflow:hidden;
   white-space:nowrap;text-overflow:ellipsis;
@@ -63,14 +62,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .green-panel .tp-name{color:var(--green);}
 
 /* score row: score + adj/timeout buttons */
-.score-row{display:flex;align-items:center;gap:0.5vw;margin-top:0.4vh;margin-bottom:clamp(2px, calc(var(--score-h, 30vh) * 0.05), 14px);flex-shrink:0;}
+.score-row{display:flex;align-items:center;gap:0.5vw;margin-top:clamp(1px, calc(calc(var(--score-pct, 30) * 1vh) * 0.01), 3px);margin-bottom:clamp(2px, calc(calc(var(--score-pct, 30) * 1vh) * 0.02), 6px);flex-shrink:0;}
 .red-panel   .score-row{flex-direction:row;}
 .green-panel .score-row{flex-direction:row-reverse;}
 
 .tp-score{
   font-family:var(--ff);
-  font-size:clamp(2rem, calc(var(--score-h, 30vh) * 0.60), 60rem);
-  line-height:0.9;
+  font-size:clamp(2rem, calc(calc(var(--score-pct, 30) * 1vh) * 0.84), 60rem);
+  line-height:1;
+  height:calc(calc(var(--score-pct, 30) * 1vh) * 0.74);
+  overflow:hidden;
   min-width:1.1ch;text-align:center;flex-shrink:0;
 }
 .red-panel   .tp-score{color:var(--red);}
@@ -79,11 +80,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 @keyframes bump{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
 
 /* adj + timeout buttons beside score */
-.side-btns{display:flex;flex-direction:column;gap:clamp(1px,calc(var(--score-h,30vh)*.02),8px);justify-content:center;}
+.side-btns{display:flex;flex-direction:column;gap:clamp(1px,calc(calc(var(--score-pct,30) * 1vh)*.02),8px);justify-content:center;}
 .adj-btn,.to-btn{
   font-family:var(--ff);
-  font-size:clamp(8px,calc(var(--score-h,30vh)*.11),2rem);
-  width:clamp(14px,calc(var(--score-h,30vh)*.16),48px);height:clamp(14px,calc(var(--score-h,30vh)*.16),48px);
+  font-size:clamp(8px,calc(calc(var(--score-pct,30) * 1vh)*.11),2rem);
+  width:clamp(14px,calc(calc(var(--score-pct,30) * 1vh)*.16),48px);height:clamp(14px,calc(calc(var(--score-pct,30) * 1vh)*.16),48px);
   border-radius:3px;border:2px solid;background:transparent;
   cursor:pointer;transition:all .15s;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;
@@ -98,9 +99,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 /* timeout btn — neutral, no colour to not distract */
 .to-btn{
   font-family:var(--ffo);font-weight:600;
-  font-size:clamp(5px,calc(var(--score-h,30vh)*.07),13px);
+  font-size:clamp(5px,calc(calc(var(--score-pct,30) * 1vh)*.07),13px);
   letter-spacing:.05em;
-  width:clamp(26px,calc(var(--score-h,30vh)*.19),64px);height:clamp(10px,calc(var(--score-h,30vh)*.09),34px);
+  width:clamp(26px,calc(calc(var(--score-pct,30) * 1vh)*.19),64px);height:clamp(10px,calc(calc(var(--score-pct,30) * 1vh)*.09),34px);
   color:var(--subtext);border-color:var(--muted);
 }
 .to-btn:not(:disabled):hover{color:var(--text);border-color:var(--subtext);}
@@ -139,14 +140,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 }
 #clock-display{
   font-family:var(--ff);
-  font-size:min(clamp(4rem, calc(var(--clock-h, 60vh) * 1.10), 99rem), 40vw);
-  line-height:1;
+  font-size:clamp(4rem, calc(var(--clock-pct, 60) * 1.23 * 1vh), 99rem);
+  line-height:0.852;
   color:var(--text);letter-spacing:0.01em;
   text-align:center;
   transition:color .4s;
   white-space:nowrap;
-  /* clip at bottom so it never bleeds into button bar */
-  max-height:100%;overflow:hidden;
+  overflow:hidden;
 }
 #clock-display.urgent{color:var(--accent);}
 #clock-display.cd    {color:var(--orange);}
@@ -471,6 +471,29 @@ function say(t){
 }
 
 // ══════════════════════════════════════════════
+// CLOCK FONT SIZING — fill container as much as possible
+// ══════════════════════════════════════════════
+let _clockPct = 60; // updated by drag IIFE whenever layout changes
+
+function updateClockFontSize(){
+  const W = window.innerWidth;
+  const H = window.innerHeight * _clockPct / 100;
+  if(!W || !H) return;
+  const disp = document.getElementById('clock-display');
+  const t = disp.textContent.trim() || '0:00';
+  // Bebas Neue width-to-height ratios per text length
+  const r = t.length <= 1 ? 0.53 :
+            t.length === 2 ? 1.00 :
+            t.length <= 4 ? 1.88 : 2.22;
+  const fs = Math.max(64, Math.min(H * 1.23, W / r));
+  const fsPx = fs.toFixed(1) + 'px';
+  if(disp.style.fontSize !== fsPx) disp.style.fontSize = fsPx;
+  // Center glyph vertically: glyph occupies 0.807×fs of the container H
+  const glyphH = fs * 0.807;
+  disp.style.marginTop = Math.max(0, (H - glyphH) / 2).toFixed(1) + 'px';
+}
+
+// ══════════════════════════════════════════════
 // CLOCK FORMAT
 // ══════════════════════════════════════════════
 function fmt(sec){
@@ -484,10 +507,13 @@ function fmt(sec){
 // ══════════════════════════════════════════════
 function setClock(time,cls,status,sCls){
   const p=S.phase;
-  // During break or timeout, main clock always shows frozen game time
   const displayTime=(p==='break'||p==='timeout')?S.timeLeft:time;
-  document.getElementById('clock-display').textContent=fmt(displayTime);
-  document.getElementById('clock-display').className=cls||'';
+  const disp=document.getElementById('clock-display');
+  const newText=fmt(displayTime);
+  const wasLen=disp.textContent.length;
+  disp.textContent=newText;
+  disp.className=cls||'';
+  if(newText.length!==wasLen) updateClockFontSize();
   const pl=document.getElementById('phase-label');
   pl.textContent=status||'';
   pl.className=sCls||'';
@@ -626,6 +652,7 @@ function startCountdown(cb){
   say('10 seconds');
   document.getElementById('clock-display').textContent='10';
   document.getElementById('clock-display').className='cd';
+  updateClockFontSize();
   document.getElementById('phase-label').textContent='START';
   document.getElementById('phase-label').className='clr-cd';
 
@@ -634,6 +661,7 @@ function startCountdown(cb){
     if(n>0){
       document.getElementById('clock-display').textContent=n;
       document.getElementById('clock-display').className='cd';
+      updateClockFontSize();
       document.getElementById('phase-label').textContent='START';
       document.getElementById('phase-label').className='clr-cd';
       const muted = cfg.noFalseStart && n<=5;
@@ -642,6 +670,7 @@ function startCountdown(cb){
       clearInterval(S.handle);
       document.getElementById('clock-display').textContent=fmt(S.timeLeft);
       document.getElementById('clock-display').className='';
+      updateClockFontSize();
       document.getElementById('phase-label').textContent='';
       beepGo();
       setTimeout(()=>{ S.phase='idle'; S.pendingCb=null; if(cb)cb(); }, 700);
@@ -1031,54 +1060,53 @@ setInterval(()=>{ updateTeamPill('green'); updateTeamPill('red'); }, 2000);
 // ══════════════════════════════════════════════
 (function(){
   const divider = document.getElementById('divider');
-  const main    = document.getElementById('screen-main');
   const btnArea = document.getElementById('btn-area');
-  let dragging  = false;
-  let startY    = 0;
-  let startH    = 0;
+  let dragging = false;
+  let startY   = 0;
+  let startPct = 30;
+  let curPct   = 30;
 
-  function getBtnHeight(){ return btnArea.getBoundingClientRect().height; }
-  function totalH(){ return main.getBoundingClientRect().height; }
-
-  function setScoreH(px){
-    const total   = totalH();
-    const btnH    = getBtnHeight();
-    const divH    = 8;
-    const minScore = 120;
-    const minClock = 120;
-    const maxScore = total - btnH - divH - minClock;
-    px = Math.max(minScore, Math.min(maxScore, px));
-    const clockH = total - px - divH - btnH;
-    document.documentElement.style.setProperty('--score-h', px+'px');
-    document.documentElement.style.setProperty('--clock-h', clockH+'px');
+  function setScorePct(pct){
+    const total    = window.innerHeight;
+    const btnH     = btnArea.getBoundingClientRect().height;
+    const overhead = (8 + btnH) / total * 100; // divider + btn-bar as % of viewport
+    const minPct   = 18;   // scoreboard ≥ 18 vh
+    const maxPct   = 100 - overhead - 20; // leave ≥ 20 vh for clock
+    pct = Math.max(minPct, Math.min(maxPct, pct));
+    const clockPct = 100 - pct - overhead;
+    curPct = pct;
+    const root = document.documentElement;
+    root.style.setProperty('--score-pct', pct.toFixed(3));
+    root.style.setProperty('--clock-pct', clockPct.toFixed(3));
+    _clockPct = clockPct;
+    updateClockFontSize();
   }
 
   function onMove(e){
     if(!dragging) return;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const delta   = clientY - startY;
-    setScoreH(startH + delta);
+    setScorePct(startPct + (clientY - startY) / window.innerHeight * 100);
   }
 
   function onUp(){
     if(!dragging) return;
     dragging = false;
     divider.classList.remove('dragging');
-    document.body.style.cursor='';
+    document.body.style.cursor = '';
   }
 
   divider.addEventListener('mousedown', e=>{
     dragging = true;
     startY   = e.clientY;
-    startH   = document.getElementById('scoreboard').getBoundingClientRect().height;
+    startPct = curPct;
     divider.classList.add('dragging');
-    document.body.style.cursor='ns-resize';
+    document.body.style.cursor = 'ns-resize';
     e.preventDefault();
   });
   divider.addEventListener('touchstart', e=>{
     dragging = true;
     startY   = e.touches[0].clientY;
-    startH   = document.getElementById('scoreboard').getBoundingClientRect().height;
+    startPct = curPct;
     divider.classList.add('dragging');
   }, {passive:true});
 
@@ -1087,18 +1115,8 @@ setInterval(()=>{ updateTeamPill('green'); updateTeamPill('red'); }, 2000);
   document.addEventListener('mouseup',  onUp);
   document.addEventListener('touchend', onUp);
 
-  // Init with default 30vh
-  window.addEventListener('load', ()=>{
-    const h = totalH() * 0.30;
-    setScoreH(h);
-  });
-  window.addEventListener('resize', ()=>{
-    // maintain proportional split on resize
-    const cur = document.getElementById('scoreboard').getBoundingClientRect().height;
-    const total = totalH();
-    const ratio = cur / total;
-    setScoreH(total * ratio);
-  });
+  window.addEventListener('load',   ()=>{ setScorePct(30); });
+  window.addEventListener('resize', ()=>{ setScorePct(curPct); }); // re-clamp & recompute clock-pct
 })();
 
 // ══════════════════════════════════════════════
