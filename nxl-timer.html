@@ -22,19 +22,38 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 #scoreboard{
   display:grid;
   grid-template-columns:1fr auto 1fr;
-  flex:0 0 auto;min-height:min(32vh,220px);max-height:38vh;
-  border-bottom:2px solid var(--border);
+  height:var(--score-h, 30vh);
+  min-height:80px;
+  flex-shrink:0;
 }
+/* ══ DRAG DIVIDER ══ */
+#divider{
+  height:8px;flex-shrink:0;
+  background:var(--border);
+  cursor:ns-resize;
+  position:relative;
+  display:flex;align-items:center;justify-content:center;
+  user-select:none;z-index:20;
+  transition:background .15s;
+}
+#divider:hover,#divider.dragging{background:var(--accent);}
+#divider::after{
+  content:'';display:block;
+  width:40px;height:3px;border-radius:2px;
+  background:var(--subtext);
+  transition:background .15s;
+}
+#divider:hover::after,#divider.dragging::after{background:#000;}
 .team-panel{
-  display:flex;flex-direction:column;justify-content:center;
-  padding:1vh 2vw;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:0 2vw 0 2vw;overflow:hidden;
 }
 .team-panel.red-panel{align-items:flex-start;}
 .team-panel.green-panel{align-items:flex-end;}
 
 .tp-name{
   font-family:var(--ff);
-  font-size:clamp(1.2rem,2.8vw,4rem);
+  font-size:clamp(1rem, calc(var(--score-h, 30vh) * 0.3), 6rem);
   letter-spacing:0.03em;line-height:1;
   max-width:100%;overflow:hidden;
   white-space:nowrap;text-overflow:ellipsis;
@@ -44,14 +63,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .green-panel .tp-name{color:var(--green);}
 
 /* score row: score + adj/timeout buttons */
-.score-row{display:flex;align-items:center;gap:0.5vw;margin-top:0.4vh;flex-shrink:0;}
+.score-row{display:flex;align-items:center;gap:0.5vw;margin-top:0.4vh;margin-bottom:clamp(2px, calc(var(--score-h, 30vh) * 0.05), 14px);flex-shrink:0;}
 .red-panel   .score-row{flex-direction:row;}
 .green-panel .score-row{flex-direction:row-reverse;}
 
 .tp-score{
   font-family:var(--ff);
-  /* score must never be taller than scoreboard minus name height */
-  font-size:clamp(3.5rem,9vw,11rem);
+  font-size:clamp(2rem, calc(var(--score-h, 30vh) * 0.60), 60rem);
   line-height:0.9;
   min-width:1.1ch;text-align:center;flex-shrink:0;
 }
@@ -61,11 +79,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 @keyframes bump{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
 
 /* adj + timeout buttons beside score */
-.side-btns{display:flex;flex-direction:column;gap:0.4vh;justify-content:center;}
+.side-btns{display:flex;flex-direction:column;gap:clamp(1px,calc(var(--score-h,30vh)*.02),8px);justify-content:center;}
 .adj-btn,.to-btn{
   font-family:var(--ff);
-  font-size:clamp(.9rem,1.6vw,2rem);
-  width:clamp(26px,2.8vw,48px);height:clamp(26px,2.8vw,48px);
+  font-size:clamp(8px,calc(var(--score-h,30vh)*.11),2rem);
+  width:clamp(14px,calc(var(--score-h,30vh)*.16),48px);height:clamp(14px,calc(var(--score-h,30vh)*.16),48px);
   border-radius:3px;border:2px solid;background:transparent;
   cursor:pointer;transition:all .15s;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;
@@ -80,9 +98,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 /* timeout btn — neutral, no colour to not distract */
 .to-btn{
   font-family:var(--ffo);font-weight:600;
-  font-size:clamp(7px,1vw,13px);
+  font-size:clamp(5px,calc(var(--score-h,30vh)*.07),13px);
   letter-spacing:.05em;
-  width:clamp(36px,4vw,64px);height:clamp(22px,2vw,34px);
+  width:clamp(26px,calc(var(--score-h,30vh)*.19),64px);height:clamp(10px,calc(var(--score-h,30vh)*.09),34px);
   color:var(--subtext);border-color:var(--muted);
 }
 .to-btn:not(:disabled):hover{color:var(--text);border-color:var(--subtext);}
@@ -111,24 +129,24 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 /* ══ CLOCK AREA — fills remaining height ══ */
 #clock-area{
   flex:1;min-height:0;
-  display:flex;align-items:flex-end;justify-content:center;
-  padding:12vh 0 2vh 0;position:relative;overflow:hidden;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:0;position:relative;overflow:hidden;
 }
-/* Use SVG-based scaling trick: font fills 100% of container height */
 #clock-wrap{
   width:100%;height:100%;
-  display:flex;align-items:center;justify-content:center;
+  display:flex;align-items:flex-start;justify-content:center;
+  overflow:hidden;
 }
 #clock-display{
   font-family:var(--ff);
-  /* clamp to viewport — aim to fill ~95% of clock area height */
-  font-size:clamp(10.1rem, 81vh, 99rem);
+  font-size:min(clamp(4rem, calc(var(--clock-h, 60vh) * 1.10), 99rem), 40vw);
   line-height:1;
   color:var(--text);letter-spacing:0.01em;
   text-align:center;
   transition:color .4s;
-  /* prevent wrapping or overflow */
   white-space:nowrap;
+  /* clip at bottom so it never bleeds into button bar */
+  max-height:100%;overflow:hidden;
 }
 #clock-display.urgent{color:var(--accent);}
 #clock-display.cd    {color:var(--orange);}
@@ -241,6 +259,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
       </div>
     </div>
   </div>
+
+  <!-- DRAG DIVIDER -->
+  <div id="divider"></div>
 
   <!-- CLOCK -->
   <div id="clock-area">
@@ -1004,6 +1025,81 @@ function heartbeat(team){
 
 // Poll pill status every 2s to catch timeouts
 setInterval(()=>{ updateTeamPill('green'); updateTeamPill('red'); }, 2000);
+
+// ══════════════════════════════════════════════
+// DRAG DIVIDER
+// ══════════════════════════════════════════════
+(function(){
+  const divider = document.getElementById('divider');
+  const main    = document.getElementById('screen-main');
+  const btnArea = document.getElementById('btn-area');
+  let dragging  = false;
+  let startY    = 0;
+  let startH    = 0;
+
+  function getBtnHeight(){ return btnArea.getBoundingClientRect().height; }
+  function totalH(){ return main.getBoundingClientRect().height; }
+
+  function setScoreH(px){
+    const total   = totalH();
+    const btnH    = getBtnHeight();
+    const divH    = 8;
+    const minScore = 120;
+    const minClock = 120;
+    const maxScore = total - btnH - divH - minClock;
+    px = Math.max(minScore, Math.min(maxScore, px));
+    const clockH = total - px - divH - btnH;
+    document.documentElement.style.setProperty('--score-h', px+'px');
+    document.documentElement.style.setProperty('--clock-h', clockH+'px');
+  }
+
+  function onMove(e){
+    if(!dragging) return;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const delta   = clientY - startY;
+    setScoreH(startH + delta);
+  }
+
+  function onUp(){
+    if(!dragging) return;
+    dragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.cursor='';
+  }
+
+  divider.addEventListener('mousedown', e=>{
+    dragging = true;
+    startY   = e.clientY;
+    startH   = document.getElementById('scoreboard').getBoundingClientRect().height;
+    divider.classList.add('dragging');
+    document.body.style.cursor='ns-resize';
+    e.preventDefault();
+  });
+  divider.addEventListener('touchstart', e=>{
+    dragging = true;
+    startY   = e.touches[0].clientY;
+    startH   = document.getElementById('scoreboard').getBoundingClientRect().height;
+    divider.classList.add('dragging');
+  }, {passive:true});
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', e=>{ onMove(e); e.preventDefault(); }, {passive:false});
+  document.addEventListener('mouseup',  onUp);
+  document.addEventListener('touchend', onUp);
+
+  // Init with default 30vh
+  window.addEventListener('load', ()=>{
+    const h = totalH() * 0.30;
+    setScoreH(h);
+  });
+  window.addEventListener('resize', ()=>{
+    // maintain proportional split on resize
+    const cur = document.getElementById('scoreboard').getBoundingClientRect().height;
+    const total = totalH();
+    const ratio = cur / total;
+    setScoreH(total * ratio);
+  });
+})();
 
 // ══════════════════════════════════════════════
 // INIT
